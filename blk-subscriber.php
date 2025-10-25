@@ -72,6 +72,7 @@ class Venus_Member_System {
         add_action('wp_ajax_venus_delete_document', array($this, 'handle_document_delete'));
         add_action('wp_ajax_venus_get_application_details', array($this, 'handle_get_application_details'));
         add_action('wp_ajax_venus_download_document', array($this, 'handle_download_document'));
+        add_action('wp_ajax_venus_save_applicant_info', array($this, 'handle_save_applicant_info'));
         
         add_action('wp_footer', array($this, 'add_vip_member_button_logic'));
 
@@ -487,15 +488,90 @@ class Venus_Member_System {
     
     public function handle_document_delete() {
         check_ajax_referer('venus_member_nonce', 'nonce');
-        
+
         if (!is_user_logged_in()) {
             wp_send_json_error('Please login first');
         }
-        
+
         $api = new Venus_Member_API();
         $result = $api->delete_document($_POST);
-        
+
         wp_send_json($result);
+    }
+
+    public function handle_save_applicant_info() {
+        check_ajax_referer('venus_member_nonce', 'nonce');
+
+        if (!is_user_logged_in()) {
+            wp_send_json_error('Please login first');
+        }
+
+        $user_id = get_current_user_id();
+
+        try {
+            $db = new VenusDatabaseTables();
+            $wpdb = $db->getConnection();
+            $applications_table = $db->getTableNameForQuery('member_applications');
+
+            // Get user application
+            $application = $wpdb->get_row(
+                $wpdb->prepare("SELECT * FROM $applications_table WHERE user_id = %d ORDER BY created_at DESC LIMIT 1", $user_id),
+                ARRAY_A
+            );
+
+            if (!$application) {
+                wp_send_json_error('No application found');
+            }
+
+            $applicant_type = sanitize_text_field($_POST['applicant_type'] ?? '');
+
+            if (!in_array($applicant_type, array('individual', 'company'))) {
+                wp_send_json_error('Invalid applicant type');
+            }
+
+            $update_data = array(
+                'applicant_type' => $applicant_type,
+                'updated_at' => current_time('mysql')
+            );
+
+            if ($applicant_type === 'company') {
+                // Company information
+                $update_data['company_name'] = sanitize_text_field($_POST['company_name'] ?? '');
+                $update_data['company_tax_id'] = sanitize_text_field($_POST['company_tax_id'] ?? '');
+                $update_data['company_establish_date'] = sanitize_text_field($_POST['company_establish_date'] ?? '');
+                $update_data['company_address'] = sanitize_text_field($_POST['company_address'] ?? '');
+                $update_data['contact_address'] = sanitize_text_field($_POST['contact_address'] ?? '');
+                $update_data['principal_name'] = sanitize_text_field($_POST['principal_name'] ?? '');
+                $update_data['contact_person_name'] = sanitize_text_field($_POST['contact_person_name'] ?? '');
+                $update_data['company_phone'] = sanitize_text_field($_POST['company_phone'] ?? '');
+                $update_data['mobile_phone'] = sanitize_text_field($_POST['mobile_phone'] ?? '');
+            } else {
+                // Individual information
+                $update_data['individual_name'] = sanitize_text_field($_POST['individual_name'] ?? '');
+                $update_data['gender'] = sanitize_text_field($_POST['gender'] ?? '');
+                $update_data['id_number'] = sanitize_text_field($_POST['id_number'] ?? '');
+                $update_data['birth_date'] = sanitize_text_field($_POST['birth_date'] ?? '');
+                $update_data['mobile_phone'] = sanitize_text_field($_POST['mobile_phone'] ?? '');
+                $update_data['contact_address'] = sanitize_text_field($_POST['contact_address'] ?? '');
+            }
+
+            $wpdb->update(
+                $applications_table,
+                $update_data,
+                array('id' => $application['id']),
+                array_fill(0, count($update_data), '%s'),
+                array('%d')
+            );
+
+            wp_send_json_success(array(
+                'message' => 'Information saved successfully',
+                'applicant_type' => $applicant_type
+            ));
+
+        } catch (Exception $e) {
+            error_log('Venus Save Applicant Info Error: ' . $e->getMessage());
+            wp_send_json_error('An error occurred while saving information');
+        }
     }
     
     public function handle_get_application_details() {
