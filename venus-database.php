@@ -66,12 +66,26 @@ class VenusDatabaseTables {
      */
     private function createMemberApplicationsTable() {
         $table_name = $this->getTableNameForQuery('member_applications');
-        
+
         $sql = "CREATE TABLE $table_name (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
             user_id bigint(20) UNSIGNED NOT NULL,
             application_number varchar(50) DEFAULT NULL,
             application_status varchar(50) NOT NULL DEFAULT 'pending',
+            applicant_type varchar(20) NOT NULL DEFAULT 'individual',
+            company_name varchar(200) DEFAULT NULL,
+            company_tax_id varchar(50) DEFAULT NULL,
+            company_establish_date date DEFAULT NULL,
+            company_address text DEFAULT NULL,
+            contact_address text DEFAULT NULL,
+            principal_name varchar(100) DEFAULT NULL,
+            contact_person_name varchar(100) DEFAULT NULL,
+            company_phone varchar(50) DEFAULT NULL,
+            individual_name varchar(100) DEFAULT NULL,
+            gender varchar(10) DEFAULT NULL,
+            id_number varchar(50) DEFAULT NULL,
+            birth_date date DEFAULT NULL,
+            mobile_phone varchar(50) DEFAULT NULL,
             consent_agreed tinyint(1) NOT NULL DEFAULT 0,
             consent_agreed_at datetime DEFAULT NULL,
             signature_completed tinyint(1) NOT NULL DEFAULT 0,
@@ -91,9 +105,10 @@ class VenusDatabaseTables {
             UNIQUE KEY application_number (application_number),
             KEY user_id (user_id),
             KEY application_status (application_status),
+            KEY applicant_type (applicant_type),
             KEY created_at (created_at)
         ) $this->charset_collate;";
-        
+
         dbDelta($sql);
         return "✅ Member applications table created/updated: $table_name";
     }

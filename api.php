@@ -119,8 +119,22 @@ class Venus_Member_API {
         }
         
         $document_type = sanitize_text_field($post_data['document_type'] ?? '');
-        
-        if (!in_array($document_type, array('id_card_front', 'id_card_back', 'bank_passbook'))) {
+
+        // Allowed document types for both individual and company
+        $allowed_document_types = array(
+            // Individual types
+            'id_card_front',
+            'id_card_back',
+            'bank_passbook',
+            // Company types
+            'company_certificate',
+            'principal_id_front',
+            'principal_id_back',
+            'company_bank_passbook',
+            'government_approval'
+        );
+
+        if (!in_array($document_type, $allowed_document_types)) {
             return array('success' => false, 'message' => 'Invalid document type');
         }
         
@@ -291,14 +305,41 @@ class Venus_Member_API {
             $wpdb = $this->db->getConnection();
             $documents_table = $this->db->getTableNameForQuery('application_documents');
             $applications_table = $this->db->getTableNameForQuery('member_applications');
-            
+
+            // Get application info to check applicant type
+            $application = $wpdb->get_row(
+                $wpdb->prepare("SELECT applicant_type FROM $applications_table WHERE id = %d", $application_id),
+                ARRAY_A
+            );
+
+            if (!$application) {
+                return;
+            }
+
             $documents = $wpdb->get_col(
                 $wpdb->prepare("SELECT document_type FROM $documents_table WHERE application_id = %d", $application_id)
             );
-            
-            $required_types = array('id_card_front', 'id_card_back');
+
+            // Define required documents based on applicant type
+            if ($application['applicant_type'] === 'company') {
+                $required_types = array(
+                    'company_certificate',
+                    'principal_id_front',
+                    'principal_id_back',
+                    'company_bank_passbook',
+                    'government_approval'
+                );
+            } else {
+                // Individual
+                $required_types = array(
+                    'id_card_front',
+                    'id_card_back',
+                    'bank_passbook'
+                );
+            }
+
             $missing_required = array_diff($required_types, $documents);
-            
+
             if (empty($missing_required)) {
                 // All required documents uploaded - change to under_review
                 $wpdb->update(
@@ -314,7 +355,7 @@ class Venus_Member_API {
                     array('%d')
                 );
             }
-            
+
         } catch (Exception $e) {
             error_log('Venus Member: Error checking documents completion - ' . $e->getMessage());
         }

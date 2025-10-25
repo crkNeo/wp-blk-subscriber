@@ -4,6 +4,113 @@
 
 jQuery(document).ready(function($) {
     
+    // Applicant type selection handling
+    $('input[name="applicant_type"]').on('change', function() {
+        var selectedType = $(this).val();
+
+        // Update active state
+        $('.type-option').removeClass('active');
+        $(this).closest('.type-option').addClass('active');
+
+        // Show/hide forms
+        if (selectedType === 'company') {
+            $('#company-info-form').slideDown();
+            $('#individual-info-form').slideUp();
+        } else {
+            $('#individual-info-form').slideDown();
+            $('#company-info-form').slideUp();
+        }
+    });
+
+    // Company info form submission
+    $('#venus-company-info-form').on('submit', function(e) {
+        e.preventDefault();
+
+        var $form = $(this);
+        var $submitBtn = $form.find('button[type="submit"]');
+        var originalText = $submitBtn.text();
+
+        // Get form data
+        var formData = {
+            action: 'venus_save_applicant_info',
+            nonce: venus_ajax.nonce,
+            applicant_type: 'company',
+            company_name: $('#company_name').val(),
+            company_tax_id: $('#company_tax_id').val(),
+            company_establish_date: $('#company_establish_date').val(),
+            company_phone: $('#company_phone').val(),
+            company_address: $('#company_address').val(),
+            contact_address: $('#contact_address').val(),
+            principal_name: $('#principal_name').val(),
+            contact_person_name: $('#contact_person_name').val(),
+            mobile_phone: $('#mobile_phone_company').val()
+        };
+
+        $submitBtn.prop('disabled', true).text('儲存中...');
+
+        $.ajax({
+            url: venus_ajax.ajax_url,
+            type: 'POST',
+            data: formData,
+            success: function(response) {
+                if (response.success) {
+                    alert('公司資料儲存成功！');
+                    location.reload();
+                } else {
+                    alert(response.data || '儲存失敗，請重試');
+                    $submitBtn.prop('disabled', false).text(originalText);
+                }
+            },
+            error: function() {
+                alert('網路錯誤，請重試');
+                $submitBtn.prop('disabled', false).text(originalText);
+            }
+        });
+    });
+
+    // Individual info form submission
+    $('#venus-individual-info-form').on('submit', function(e) {
+        e.preventDefault();
+
+        var $form = $(this);
+        var $submitBtn = $form.find('button[type="submit"]');
+        var originalText = $submitBtn.text();
+
+        // Get form data
+        var formData = {
+            action: 'venus_save_applicant_info',
+            nonce: venus_ajax.nonce,
+            applicant_type: 'individual',
+            individual_name: $('#individual_name').val(),
+            gender: $('#gender').val(),
+            id_number: $('#id_number').val(),
+            birth_date: $('#birth_date').val(),
+            mobile_phone: $('#mobile_phone_individual').val(),
+            contact_address: $('#contact_address_individual').val()
+        };
+
+        $submitBtn.prop('disabled', true).text('儲存中...');
+
+        $.ajax({
+            url: venus_ajax.ajax_url,
+            type: 'POST',
+            data: formData,
+            success: function(response) {
+                if (response.success) {
+                    alert('個人資料儲存成功！');
+                    location.reload();
+                } else {
+                    alert(response.data || '儲存失敗，請重試');
+                    $submitBtn.prop('disabled', false).text(originalText);
+                }
+            },
+            error: function() {
+                alert('網路錯誤，請重試');
+                $submitBtn.prop('disabled', false).text(originalText);
+            }
+        });
+    });
+
     // Consent form handling
     $('#venus-consent-form').on('submit', function(e) {
         e.preventDefault();
