@@ -690,15 +690,126 @@ class Venus_Member_System {
         }
     }
     
+    /**
+     * Get document type display name
+     */
+    private function get_document_type_name($type) {
+        $document_types = array(
+            // Individual document types
+            'id_card_front' => '身分證正面',
+            'id_card_back' => '身分證反面',
+            'bank_passbook' => '銀行存摺封面',
+            // Company document types
+            'company_certificate' => '公司證明文件',
+            'principal_id_front' => '負責人身分證正面',
+            'principal_id_back' => '負責人身分證反面',
+            'company_bank_passbook' => '公司戶收款存摺',
+            'government_approval' => '市政府核准函'
+        );
+
+        return isset($document_types[$type]) ? $document_types[$type] : ucwords(str_replace('_', ' ', $type));
+    }
+
     private function generate_application_details_html($application, $documents, $consent_records) {
         ob_start();
+
+        // Determine applicant type display
+        $applicant_type = $application['applicant_type'] ?? 'individual';
+        $applicant_type_display = $applicant_type === 'company' ? '🏢 公司' : '👤 個人';
         ?>
         <div class="venus-app-details">
-            <h3>Application Details - #<?php echo esc_html($application['id']); ?></h3>
-            
+            <h3>申請詳情 - #<?php echo esc_html($application['id']); ?></h3>
+
             <div class="venus-details-section">
-                <h4>User Information</h4>
+                <h4>申請人資訊</h4>
                 <table class="form-table">
+                    <tr>
+                        <th>申請身份:</th>
+                        <td><strong style="font-size: 1.1em;"><?php echo $applicant_type_display; ?></strong></td>
+                    </tr>
+                    <?php if ($applicant_type === 'company'): ?>
+                        <!-- Company Information -->
+                        <?php if (!empty($application['company_name'])): ?>
+                        <tr>
+                            <th>公司全名:</th>
+                            <td><?php echo esc_html($application['company_name']); ?></td>
+                        </tr>
+                        <?php endif; ?>
+                        <?php if (!empty($application['company_tax_id'])): ?>
+                        <tr>
+                            <th>統一編號:</th>
+                            <td><?php echo esc_html($application['company_tax_id']); ?></td>
+                        </tr>
+                        <?php endif; ?>
+                        <?php if (!empty($application['company_establish_date'])): ?>
+                        <tr>
+                            <th>公司設立日期:</th>
+                            <td><?php echo esc_html($application['company_establish_date']); ?></td>
+                        </tr>
+                        <?php endif; ?>
+                        <?php if (!empty($application['company_address'])): ?>
+                        <tr>
+                            <th>公司地址:</th>
+                            <td><?php echo esc_html($application['company_address']); ?></td>
+                        </tr>
+                        <?php endif; ?>
+                        <?php if (!empty($application['principal_name'])): ?>
+                        <tr>
+                            <th>負責人姓名:</th>
+                            <td><?php echo esc_html($application['principal_name']); ?></td>
+                        </tr>
+                        <?php endif; ?>
+                        <?php if (!empty($application['contact_person_name'])): ?>
+                        <tr>
+                            <th>聯絡人姓名:</th>
+                            <td><?php echo esc_html($application['contact_person_name']); ?></td>
+                        </tr>
+                        <?php endif; ?>
+                        <?php if (!empty($application['company_phone'])): ?>
+                        <tr>
+                            <th>公司電話:</th>
+                            <td><?php echo esc_html($application['company_phone']); ?></td>
+                        </tr>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <!-- Individual Information -->
+                        <?php if (!empty($application['individual_name'])): ?>
+                        <tr>
+                            <th>姓名:</th>
+                            <td><?php echo esc_html($application['individual_name']); ?></td>
+                        </tr>
+                        <?php endif; ?>
+                        <?php if (!empty($application['gender'])): ?>
+                        <tr>
+                            <th>性別:</th>
+                            <td><?php echo esc_html($application['gender'] === 'male' ? '男' : ($application['gender'] === 'female' ? '女' : '其他')); ?></td>
+                        </tr>
+                        <?php endif; ?>
+                        <?php if (!empty($application['id_number'])): ?>
+                        <tr>
+                            <th>身分證字號:</th>
+                            <td><?php echo esc_html($application['id_number']); ?></td>
+                        </tr>
+                        <?php endif; ?>
+                        <?php if (!empty($application['birth_date'])): ?>
+                        <tr>
+                            <th>出生年月日:</th>
+                            <td><?php echo esc_html($application['birth_date']); ?></td>
+                        </tr>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                    <?php if (!empty($application['mobile_phone'])): ?>
+                    <tr>
+                        <th>手機號碼:</th>
+                        <td><?php echo esc_html($application['mobile_phone']); ?></td>
+                    </tr>
+                    <?php endif; ?>
+                    <?php if (!empty($application['contact_address'])): ?>
+                    <tr>
+                        <th>聯絡地址:</th>
+                        <td><?php echo esc_html($application['contact_address']); ?></td>
+                    </tr>
+                    <?php endif; ?>
                     <tr>
                         <th>User ID:</th>
                         <td><?php echo esc_html($application['user_id']); ?></td>
@@ -776,11 +887,11 @@ class Venus_Member_System {
                         <tbody>
                             <?php foreach ($documents as $doc): ?>
                             <tr>
-                                <td><?php echo esc_html(ucwords(str_replace('_', ' ', $doc['document_type']))); ?></td>
+                                <td><strong><?php echo esc_html($this->get_document_type_name($doc['document_type'])); ?></strong></td>
                                 <td>
                                     <?php echo esc_html($doc['original_filename']); ?>
                                     <br>
-                                    <button type="button" class="button button-small preview-document" 
+                                    <button type="button" class="button button-small preview-document"
                                             data-doc-id="<?php echo esc_attr($doc['id']); ?>"
                                             data-file-path="<?php echo esc_attr($doc['file_path']); ?>"
                                             data-file-type="<?php echo esc_attr($doc['mime_type']); ?>"
