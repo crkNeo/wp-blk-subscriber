@@ -12,13 +12,21 @@ jQuery(document).ready(function($) {
         $('.type-option').removeClass('active');
         $(this).closest('.type-option').addClass('active');
 
-        // Show/hide forms
+        // Show/hide forms and documents
         if (selectedType === 'company') {
             $('#company-info-form').slideDown();
             $('#individual-info-form').slideUp();
+            $('#company-documents-section').slideDown();
+            $('#individual-documents-section').slideUp();
+            $('#company-completion-notice').show();
+            $('#individual-completion-notice').hide();
         } else {
             $('#individual-info-form').slideDown();
             $('#company-info-form').slideUp();
+            $('#individual-documents-section').slideDown();
+            $('#company-documents-section').slideUp();
+            $('#individual-completion-notice').show();
+            $('#company-completion-notice').hide();
         }
     });
 

@@ -49,22 +49,32 @@ $individual_document_types = array(
     'bank_passbook' => array('name' => '銀行存摺封面', 'required' => true, 'uploaded' => false)
 );
 
-// Choose document types based on applicant type
-$document_types = $applicant_type === 'company' ? $company_document_types : $individual_document_types;
-
-// Mark uploaded documents
+// Mark uploaded documents for both types
 foreach ($documents as $doc) {
-    if (isset($document_types[$doc['document_type']])) {
-        $document_types[$doc['document_type']]['uploaded'] = true;
-        $document_types[$doc['document_type']]['document'] = $doc;
+    if (isset($company_document_types[$doc['document_type']])) {
+        $company_document_types[$doc['document_type']]['uploaded'] = true;
+        $company_document_types[$doc['document_type']]['document'] = $doc;
+    }
+    if (isset($individual_document_types[$doc['document_type']])) {
+        $individual_document_types[$doc['document_type']]['uploaded'] = true;
+        $individual_document_types[$doc['document_type']]['document'] = $doc;
     }
 }
 
-// Check if all required documents are uploaded
-$all_required_uploaded = true;
-foreach ($document_types as $type => $info) {
+// Check if all required documents are uploaded for company
+$company_all_uploaded = true;
+foreach ($company_document_types as $type => $info) {
     if ($info['required'] && !$info['uploaded']) {
-        $all_required_uploaded = false;
+        $company_all_uploaded = false;
+        break;
+    }
+}
+
+// Check if all required documents are uploaded for individual
+$individual_all_uploaded = true;
+foreach ($individual_document_types as $type => $info) {
+    if ($info['required'] && !$info['uploaded']) {
+        $individual_all_uploaded = false;
         break;
     }
 }
@@ -275,8 +285,9 @@ foreach ($document_types as $type => $info) {
         </div>
     </div>
 
-    <div class="documents-section">
-        <?php foreach ($document_types as $type => $info): ?>
+    <!-- Company Documents Section -->
+    <div id="company-documents-section" class="documents-section" style="display: <?php echo $applicant_type === 'company' ? 'block' : 'none'; ?>;">
+        <?php foreach ($company_document_types as $type => $info): ?>
             <div class="document-upload-section">
                 <div class="document-header">
                     <h4>
@@ -337,14 +348,92 @@ foreach ($document_types as $type => $info) {
         <?php endforeach; ?>
     </div>
 
-    <?php if ($all_required_uploaded && ($application['application_status'] === 'documents_pending' || $application['application_status'] === 'pending')): ?>
-        <div class="completion-notice">
-            <div class="notice-content">
-                <h3>🎉 所有必需文件已上傳完成</h3>
-                <p>您的申請已自動提交審核，我們會盡快處理。</p>
+    <!-- Individual Documents Section -->
+    <div id="individual-documents-section" class="documents-section" style="display: <?php echo $applicant_type === 'individual' ? 'block' : 'none'; ?>;">
+        <?php foreach ($individual_document_types as $type => $info): ?>
+            <div class="document-upload-section">
+                <div class="document-header">
+                    <h4>
+                        <?php echo esc_html($info['name']); ?>
+                        <?php if ($info['required']): ?>
+                            <span class="required-badge">必須</span>
+                        <?php else: ?>
+                            <span class="optional-badge">選填</span>
+                        <?php endif; ?>
+                    </h4>
+
+                    <?php if ($info['uploaded']): ?>
+                        <div class="upload-status uploaded">
+                            <span class="status-icon">✅</span>
+                            <span class="status-text">已上傳</span>
+                        </div>
+                    <?php else: ?>
+                        <div class="upload-status pending">
+                            <span class="status-icon">⏳</span>
+                            <span class="status-text">待上傳</span>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($info['uploaded']): ?>
+                    <!-- Show uploaded document -->
+                    <div class="uploaded-document">
+                        <div class="document-info">
+                            <p><strong>檔案:</strong> <?php echo esc_html($info['document']['original_filename']); ?></p>
+                            <p><strong>容量:</strong> <?php echo number_format($info['document']['file_size'] / 1024 / 1024, 2); ?> MB</p>
+                            <p><strong>上傳時間:</strong> <?php echo date('Y-m-d H:i', strtotime($info['document']['uploaded_at'])); ?></p>
+                        </div>
+
+                        <?php if ($application['application_status'] !== 'under_review' && $application['application_status'] !== 'approved'): ?>
+                            <div class="document-actions">
+                                <button type="button" class="button venus-delete-document" data-document-id="<?php echo $info['document']['id']; ?>">
+                                    刪除 & 重新上傳
+                                </button>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php else: ?>
+                    <!-- Show upload form -->
+                    <form class="venus-document-upload-form" enctype="multipart/form-data">
+                        <input type="hidden" name="document_type" value="<?php echo esc_attr($type); ?>">
+
+                        <div class="file-input-container">
+                            <input type="file" name="document_file" class="venus-file-input" accept=".jpg,.jpeg,.png,.pdf" required>
+                            <div class="venus-file-preview" style="display: none;"></div>
+                        </div>
+
+                        <div class="upload-actions">
+                            <button type="submit" class="button button-primary">上傳文件</button>
+                        </div>
+                    </form>
+                <?php endif; ?>
             </div>
-        </div>
-    <?php endif; ?>
+        <?php endforeach; ?>
+    </div>
+
+    <!-- Company completion notice -->
+    <div id="company-completion-notice" style="display: <?php echo $applicant_type === 'company' ? 'block' : 'none'; ?>;">
+        <?php if ($company_all_uploaded && ($application['application_status'] === 'documents_pending' || $application['application_status'] === 'pending')): ?>
+            <div class="completion-notice">
+                <div class="notice-content">
+                    <h3>🎉 所有必需文件已上傳完成</h3>
+                    <p>您的申請已自動提交審核，我們會盡快處理。</p>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <!-- Individual completion notice -->
+    <div id="individual-completion-notice" style="display: <?php echo $applicant_type === 'individual' ? 'block' : 'none'; ?>;">
+        <?php if ($individual_all_uploaded && ($application['application_status'] === 'documents_pending' || $application['application_status'] === 'pending')): ?>
+            <div class="completion-notice">
+                <div class="notice-content">
+                    <h3>🎉 所有必需文件已上傳完成</h3>
+                    <p>您的申請已自動提交審核，我們會盡快處理。</p>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
 </div>
 
 <style>
