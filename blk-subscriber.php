@@ -25,6 +25,7 @@ if (!defined('ABSPATH')) {
 
 // Define plugin constants
 define('VENUS_MEMBER_VERSION', '1.0.0');
+define('VENUS_MEMBER_DB_VERSION', '1.1.0'); // Database version
 define('VENUS_MEMBER_PLUGIN_FILE', __FILE__);
 define('VENUS_MEMBER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('VENUS_MEMBER_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -54,7 +55,8 @@ class Venus_Member_System {
     private function init_hooks() {
         register_activation_hook(VENUS_MEMBER_PLUGIN_FILE, array($this, 'activate'));
         register_deactivation_hook(VENUS_MEMBER_PLUGIN_FILE, array($this, 'deactivate'));
-        
+
+        add_action('plugins_loaded', array($this, 'check_database_version'));
         add_action('init', array($this, 'init'));
         add_action('wp_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action('wp_footer', array($this, 'add_consent_button_scripts'));
@@ -98,9 +100,15 @@ class Venus_Member_System {
         try {
             $database = new VenusDatabaseTables();
 
-            // 記錄開始建立資料表
-            error_log('Venus Member System: Starting database table creation...');
+            // 檢查數據庫版本
+            $installed_db_version = get_option('venus_member_db_version', '0');
 
+            // 記錄開始建立/更新資料表
+            error_log('Venus Member System: Starting database table creation/update...');
+            error_log('Venus Member System: Installed DB version: ' . $installed_db_version);
+            error_log('Venus Member System: Current DB version: ' . VENUS_MEMBER_DB_VERSION);
+
+            // 總是執行 dbDelta 來確保表結構是最新的
             $result = $database->createAllTables();
 
             // 記錄建立結果
@@ -165,10 +173,46 @@ class Venus_Member_System {
 
         // 設定插件版本選項，用於將來的更新檢查
         update_option('venus_member_version', VENUS_MEMBER_VERSION);
+        update_option('venus_member_db_version', VENUS_MEMBER_DB_VERSION);
+
+        error_log('Venus Member System: Database version updated to ' . VENUS_MEMBER_DB_VERSION);
     }
 
     public function deactivate() {
         flush_rewrite_rules();
+    }
+
+    public function check_database_version() {
+        $installed_db_version = get_option('venus_member_db_version', '0');
+
+        // 如果數據庫版本不匹配，自動升級
+        if (version_compare($installed_db_version, VENUS_MEMBER_DB_VERSION, '<')) {
+            error_log('Venus Member System: Database version mismatch. Upgrading from ' . $installed_db_version . ' to ' . VENUS_MEMBER_DB_VERSION);
+
+            // 載入必要的WordPress函數
+            if (!function_exists('dbDelta')) {
+                require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+            }
+
+            // 執行數據庫升級
+            require_once VENUS_MEMBER_PLUGIN_DIR . 'venus-database.php';
+            $database = new VenusDatabaseTables();
+            $result = $database->createAllTables();
+
+            // 更新數據庫版本
+            update_option('venus_member_db_version', VENUS_MEMBER_DB_VERSION);
+
+            error_log('Venus Member System: Database upgraded successfully - ' . $result);
+
+            // 添加管理員通知
+            add_action('admin_notices', function() {
+                if (current_user_can('manage_options')) {
+                    echo '<div class="notice notice-success is-dismissible">';
+                    echo '<p><strong>Venus Member System:</strong> 數據庫已自動升級到版本 ' . VENUS_MEMBER_DB_VERSION . '</p>';
+                    echo '</div>';
+                }
+            });
+        }
     }
 
     public function init() {
