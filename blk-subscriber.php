@@ -108,6 +108,9 @@ class Venus_Member_System {
             error_log('Venus Member System: Installed DB version: ' . $installed_db_version);
             error_log('Venus Member System: Current DB version: ' . VENUS_MEMBER_DB_VERSION);
 
+            // 先執行 ALTER TABLE 添加新欄位（如果不存在）
+            $this->upgrade_database_schema();
+
             // 總是執行 dbDelta 來確保表結構是最新的
             $result = $database->createAllTables();
 
@@ -183,6 +186,7 @@ class Venus_Member_System {
     }
 
     public function check_database_version() {
+        global $wpdb;
         $installed_db_version = get_option('venus_member_db_version', '0');
 
         // 如果數據庫版本不匹配，自動升級
@@ -197,6 +201,11 @@ class Venus_Member_System {
             // 執行數據庫升級
             require_once VENUS_MEMBER_PLUGIN_DIR . 'venus-database.php';
             $database = new VenusDatabaseTables();
+
+            // 先執行 ALTER TABLE 添加新欄位（如果不存在）
+            $this->upgrade_database_schema();
+
+            // 然後執行 dbDelta 確保完整結構
             $result = $database->createAllTables();
 
             // 更新數據庫版本
@@ -212,6 +221,72 @@ class Venus_Member_System {
                     echo '</div>';
                 }
             });
+        }
+    }
+
+    /**
+     * 使用 ALTER TABLE 升級資料庫架構
+     * 確保新欄位被添加到現有表格
+     */
+    private function upgrade_database_schema() {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'venus_member_applications';
+
+        // 檢查表格是否存在
+        $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table_name'");
+        if (!$table_exists) {
+            error_log('Venus Member System: Table does not exist, will be created by dbDelta');
+            return;
+        }
+
+        error_log('Venus Member System: Upgrading database schema for table: ' . $table_name);
+
+        // 定義需要添加的新欄位
+        $new_columns = array(
+            'applicant_type' => "VARCHAR(20) NOT NULL DEFAULT 'individual' AFTER application_status",
+            'company_name' => "VARCHAR(200) DEFAULT NULL AFTER applicant_type",
+            'company_tax_id' => "VARCHAR(50) DEFAULT NULL AFTER company_name",
+            'company_establish_date' => "DATE DEFAULT NULL AFTER company_tax_id",
+            'company_address' => "TEXT DEFAULT NULL AFTER company_establish_date",
+            'contact_address' => "TEXT DEFAULT NULL AFTER company_address",
+            'principal_name' => "VARCHAR(100) DEFAULT NULL AFTER contact_address",
+            'contact_person_name' => "VARCHAR(100) DEFAULT NULL AFTER principal_name",
+            'company_phone' => "VARCHAR(50) DEFAULT NULL AFTER contact_person_name",
+            'individual_name' => "VARCHAR(100) DEFAULT NULL AFTER company_phone",
+            'gender' => "VARCHAR(10) DEFAULT NULL AFTER individual_name",
+            'id_number' => "VARCHAR(50) DEFAULT NULL AFTER gender",
+            'birth_date' => "DATE DEFAULT NULL AFTER id_number",
+            'mobile_phone' => "VARCHAR(50) DEFAULT NULL AFTER birth_date"
+        );
+
+        // 檢查每個欄位是否存在，不存在則添加
+        foreach ($new_columns as $column_name => $column_definition) {
+            $column_exists = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SHOW COLUMNS FROM `$table_name` LIKE %s",
+                    $column_name
+                )
+            );
+
+            if (empty($column_exists)) {
+                $sql = "ALTER TABLE `$table_name` ADD COLUMN `$column_name` $column_definition";
+                $result = $wpdb->query($sql);
+
+                if ($result !== false) {
+                    error_log("Venus Member System: Added column '$column_name' to table '$table_name'");
+                } else {
+                    error_log("Venus Member System: Failed to add column '$column_name' - " . $wpdb->last_error);
+                }
+            } else {
+                error_log("Venus Member System: Column '$column_name' already exists");
+            }
+        }
+
+        // 添加索引（如果不存在）
+        $index_exists = $wpdb->get_results("SHOW INDEX FROM `$table_name` WHERE Key_name = 'applicant_type'");
+        if (empty($index_exists)) {
+            $wpdb->query("ALTER TABLE `$table_name` ADD INDEX `applicant_type` (`applicant_type`)");
+            error_log("Venus Member System: Added index for 'applicant_type' column");
         }
     }
 
