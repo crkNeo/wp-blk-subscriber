@@ -108,14 +108,21 @@ class Venus_Member_System {
             error_log('Venus Member System: Installed DB version: ' . $installed_db_version);
             error_log('Venus Member System: Current DB version: ' . VENUS_MEMBER_DB_VERSION);
 
-            // 先執行 ALTER TABLE 添加新欄位（如果不存在）
-            $this->upgrade_database_schema();
-
-            // 總是執行 dbDelta 來確保表結構是最新的
+            // 先執行 dbDelta 來建立或更新表結構
             $result = $database->createAllTables();
 
             // 記錄建立結果
             error_log('Venus Member System: Database creation result - ' . $result);
+
+            // 如果表格已存在，再執行 ALTER TABLE 確保所有新欄位都被添加
+            global $wpdb;
+            $table_name = $wpdb->prefix . 'venus_member_applications';
+            $table_exists = $wpdb->get_var("SHOW TABLES LIKE '$table_name'");
+
+            if ($table_exists) {
+                error_log('Venus Member System: Table exists, checking for missing columns...');
+                $this->upgrade_database_schema();
+            }
 
             // 檢查表格是否真的建立成功
             $tables_exist = $database->checkTablesExist();
@@ -141,7 +148,7 @@ class Venus_Member_System {
                         echo '<div class="error notice">';
                         echo '<p><strong>Venus Member System:</strong> 部分資料表建立失敗！</p>';
                         echo '<p>缺少的表格：' . implode(', ', $missing_tables) . '</p>';
-                        echo '<p>請執行測試腳本檢查問題：<code>' . plugin_dir_url(__FILE__) . 'tmp_rovodev_test_database.php</code></p>';
+                        echo '<p>請執行測試腳本檢查問題：<code>' . plugin_dir_url(__FILE__) . 'test-database-creation.php</code></p>';
                         echo '</div>';
                     }
                 });
@@ -165,7 +172,7 @@ class Venus_Member_System {
                     echo '<div class="error notice">';
                     echo '<p><strong>Venus Member System 啟用錯誤:</strong></p>';
                     echo '<p>' . esc_html($error_msg) . '</p>';
-                    echo '<p>請檢查錯誤日誌或執行測試腳本：<code>' . plugin_dir_url(__FILE__) . 'tmp_rovodev_test_database.php</code></p>';
+                    echo '<p>請檢查錯誤日誌或執行測試腳本：<code>' . plugin_dir_url(__FILE__) . 'test-database-creation.php</code></p>';
                     echo '</div>';
                 }
             });
