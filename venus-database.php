@@ -34,6 +34,13 @@ class VenusDatabaseTables {
     public function getTableNameForQuery($table_name) {
         return $this->wpdb->prefix . 'venus_' . $table_name;
     }
+
+    /**
+     * Get commission table name for queries
+     */
+    public function getCommissionTableNameForQuery($table_name) {
+        return $this->wpdb->prefix . $table_name;
+    }
     
     /**
      * Create all tables

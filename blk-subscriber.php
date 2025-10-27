@@ -556,7 +556,7 @@ class Venus_Member_System {
             } else {
                 // 創建新的申請記錄
                 $application_number = 'VMS' . date('Ymd') . str_pad($user_id, 4, '0', STR_PAD_LEFT) . rand(100, 999);
-                
+
                 $wpdb->insert(
                     $applications_table,
                     array(
@@ -571,7 +571,64 @@ class Venus_Member_System {
                 );
                 $application_id = $wpdb->insert_id;
             }
-            
+
+            // 處理推薦碼邏輯
+            $referral_code = sanitize_text_field($_POST['referral_code'] ?? '');
+
+            // 取得用戶 email
+            $user_info = get_userdata($user_id);
+            $user_email = $user_info ? $user_info->user_email : '';
+
+            // 如果有提供推薦碼，進行驗證和綁定
+            if (!empty($referral_code)) {
+                $commission_table = $db->getCommissionTableNameForQuery('commission_coupons');
+                $coupon = $wpdb->get_row(
+                    $wpdb->prepare(
+                        "SELECT * FROM $commission_table WHERE coupon_code = %s AND status = %s",
+                        $referral_code,
+                        'active'
+                    ),
+                    ARRAY_A
+                );
+
+                if (!$coupon) {
+                    // 推薦碼無效或不存在，返回錯誤
+                    wp_send_json_error('Invalid referral code');
+                    return; // 明確返回，雖然 wp_send_json_error 會終止執行
+                }
+
+                // 推薦碼有效，檢查是否已經綁定
+                $downlines_table = $db->getCommissionTableNameForQuery('commission_downlines');
+                $downline = $wpdb->get_row(
+                    $wpdb->prepare(
+                        "SELECT * FROM $downlines_table WHERE downline_email = %s AND holder_email = %s",
+                        $user_email,
+                        $coupon['holder_email']
+                    ),
+                    ARRAY_A
+                );
+
+                if (!$downline) {
+                    // 建立推薦關係
+                    $insert_result = $wpdb->insert(
+                        $downlines_table,
+                        array(
+                            'holder_email' => $coupon['holder_email'],
+                            'downline_email' => $user_email,
+                            'created_at' => current_time('mysql')
+                        ),
+                        array('%s', '%s', '%s')
+                    );
+
+                    if (!$insert_result) {
+                        error_log('Venus Member System: Failed to create referral relationship - ' . $wpdb->last_error);
+                    } else {
+                        error_log('Venus Member System: Referral relationship created successfully');
+                    }
+                }
+            }
+            // 如果推薦碼為空，跳過驗證，繼續往下執行
+
             // 記錄同意書簽署
             $consent_table = $db->getTableNameForQuery('consent_records');
             $wpdb->insert(
@@ -580,11 +637,13 @@ class Venus_Member_System {
                     'application_id' => $application_id,
                     'user_id' => $user_id,
                     'consent_type' => 'member_benefits_agreement',
+                    'consent_content' => '會員權益說明書',  // 添加必填欄位
                     'consent_version' => '1.0',
-                    'agreed_at' => current_time('mysql'),
-                    'user_ip' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
+                    'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',  // 修正欄位名稱
+                    'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',  // 添加必填欄位
+                    'agreed_at' => current_time('mysql')
                 ),
-                array('%d', '%d', '%s', '%s', '%s', '%s')
+                array('%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s')
             );
             
             // 暫時跳過點點簽和金流，直接進入文件上傳階段
