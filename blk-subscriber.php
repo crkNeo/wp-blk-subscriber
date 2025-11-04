@@ -567,53 +567,16 @@ class Venus_Member_System
             $db = new VenusDatabaseTables();
             $wpdb = $db->getConnection();
 
-            // 檢查是否已有申請記錄
-            $applications_table = $db->getTableNameForQuery('member_applications');
-            $existing_application = $wpdb->get_row(
-                $wpdb->prepare("SELECT * FROM $applications_table WHERE user_id = %d ORDER BY created_at DESC LIMIT 1", $user_id),
-                ARRAY_A
-            );
-
-            if ($existing_application) {
-                // 更新現有申請狀態
-                $wpdb->update(
-                    $applications_table,
-                    array(
-                        'application_status' => 'document_signed',
-                        'consent_agreed_at' => current_time('mysql'),
-                        'updated_at' => current_time('mysql')
-                    ),
-                    array('id' => $existing_application['id']),
-                    array('%s', '%s', '%s'),
-                    array('%d')
-                );
-                $application_id = $existing_application['id'];
-            } else {
-                // 創建新的申請記錄
-                $application_number = 'VMS' . date('Ymd') . str_pad($user_id, 4, '0', STR_PAD_LEFT) . rand(100, 999);
-
-                $wpdb->insert(
-                    $applications_table,
-                    array(
-                        'user_id' => $user_id,
-                        'application_number' => $application_number,
-                        'application_status' => 'document_signed',
-                        'consent_agreed_at' => current_time('mysql'),
-                        'created_at' => current_time('mysql'),
-                        'updated_at' => current_time('mysql')
-                    ),
-                    array('%d', '%s', '%s', '%s', '%s', '%s')
-                );
-                $application_id = $wpdb->insert_id;
-            }
-            // 處理推薦碼邏輯
-            $referral_code = sanitize_text_field($_POST['referral_code'] ?? '');
-
-            // 取得用戶 email
+            // 取得用戶資訊
             $user_info = get_userdata($user_id);
             $user_email = $user_info ? $user_info->user_email : '';
 
-            // 如果有提供推薦碼，進行驗證和綁定
+            // 先處理推薦碼驗證（在創建 application 之前）
+            $referral_code = sanitize_text_field($_POST['referral_code'] ?? '');
+            $referrer_email = null;
+            $referrer_user_id = null;
+
+            // 如果有提供推薦碼，進行驗證
             if (!empty($referral_code)) {
                 $commission_table = $db->getCommissionTableNameForQuery('commission_coupons');
                 $coupon = $wpdb->get_row(
@@ -628,16 +591,86 @@ class Venus_Member_System
                 if (!$coupon) {
                     // 推薦碼無效或不存在，返回錯誤
                     wp_send_json_error('無效的推薦碼');
-                    return; // 明確返回，雖然 wp_send_json_error 會終止執行
+                    return;
                 }
 
-                // 推薦碼有效，檢查是否已經綁定
+                // 推薦碼有效，取得推薦人資訊
+                $referrer_email = $coupon['holder_email'];
+
+                // 從 email 取得推薦人的 user_id
+                $referrer_user = get_user_by('email', $referrer_email);
+                if ($referrer_user) {
+                    $referrer_user_id = $referrer_user->ID;
+                }
+
+                error_log("Venus Member System: Valid referral code. Referrer: $referrer_email (User ID: $referrer_user_id)");
+            }
+
+            // 檢查是否已有申請記錄
+            $applications_table = $db->getTableNameForQuery('member_applications');
+            $existing_application = $wpdb->get_row(
+                $wpdb->prepare("SELECT * FROM $applications_table WHERE user_id = %d ORDER BY created_at DESC LIMIT 1", $user_id),
+                ARRAY_A
+            );
+
+            if ($existing_application) {
+                // 更新現有申請狀態
+                $update_data = array(
+                    'application_status' => 'document_signed',
+                    'consent_agreed_at' => current_time('mysql'),
+                    'updated_at' => current_time('mysql')
+                );
+                $update_format = array('%s', '%s', '%s');
+
+                // 如果有推薦人且原本沒有推薦人，則更新推薦人資訊
+                if ($referrer_email && empty($existing_application['referrer_email'])) {
+                    $update_data['referrer_email'] = $referrer_email;
+                    $update_data['referrer_user_id'] = $referrer_user_id;
+                    $update_format[] = '%s';
+                    $update_format[] = '%d';
+                }
+
+                $wpdb->update(
+                    $applications_table,
+                    $update_data,
+                    array('id' => $existing_application['id']),
+                    $update_format,
+                    array('%d')
+                );
+                $application_id = $existing_application['id'];
+            } else {
+                // 創建新的申請記錄
+                $application_number = 'VMS' . date('Ymd') . str_pad($user_id, 4, '0', STR_PAD_LEFT) . rand(100, 999);
+
+                $insert_data = array(
+                    'user_id' => $user_id,
+                    'application_number' => $application_number,
+                    'application_status' => 'document_signed',
+                    'referrer_email' => $referrer_email,
+                    'referrer_user_id' => $referrer_user_id,
+                    'consent_agreed_at' => current_time('mysql'),
+                    'created_at' => current_time('mysql'),
+                    'updated_at' => current_time('mysql')
+                );
+
+                $wpdb->insert(
+                    $applications_table,
+                    $insert_data,
+                    array('%d', '%s', '%s', '%s', '%d', '%s', '%s', '%s')
+                );
+                $application_id = $wpdb->insert_id;
+            }
+
+            // 如果有推薦碼，建立 commission_downlines 關係
+            if (!empty($referral_code) && $referrer_email) {
                 $downlines_table = $db->getCommissionTableNameForQuery('commission_downlines');
+
+                // 檢查是否已經綁定
                 $downline = $wpdb->get_row(
                     $wpdb->prepare(
                         "SELECT * FROM $downlines_table WHERE downline_email = %s AND holder_email = %s",
                         $user_email,
-                        $coupon['holder_email']
+                        $referrer_email
                     ),
                     ARRAY_A
                 );
@@ -647,7 +680,7 @@ class Venus_Member_System
                     $insert_result = $wpdb->insert(
                         $downlines_table,
                         array(
-                            'holder_email' => $coupon['holder_email'],
+                            'holder_email' => $referrer_email,
                             'downline_email' => $user_email,
                             'created_at' => current_time('mysql')
                         ),
@@ -659,6 +692,8 @@ class Venus_Member_System
                     } else {
                         error_log('Venus Member System: Referral relationship created successfully');
                     }
+                } else {
+                    error_log('Venus Member System: Referral relationship already exists');
                 }
             }
             // 記錄同意書簽署
@@ -669,12 +704,13 @@ class Venus_Member_System
                     'application_id' => $application_id,
                     'user_id' => $user_id,
                     'consent_type' => 'member_benefits_agreement',
+                    'consent_content' => '會員權益說明書',
                     'consent_version' => '1.0',
-                    'agreed_at' => current_time('mysql'),
+                    'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'unknown',
                     'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? 'unknown',
-                    'ip_address' => $_SERVER['REMOTE_ADDR'] ?? 'unknown'
+                    'agreed_at' => current_time('mysql')
                 ),
-                array('%d', '%d', '%s', '%s', '%s', '%s', '%s')
+                array('%d', '%d', '%s', '%s', '%s', '%s', '%s', '%s')
             );
 
             // 暫時跳過點點簽和金流，直接進入文件上傳階段
