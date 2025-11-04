@@ -93,6 +93,8 @@ class VenusDatabaseTables {
             id_number varchar(50) DEFAULT NULL,
             birth_date date DEFAULT NULL,
             mobile_phone varchar(50) DEFAULT NULL,
+            referrer_email varchar(255) DEFAULT NULL,
+            referrer_user_id bigint(20) UNSIGNED DEFAULT NULL,
             consent_agreed tinyint(1) NOT NULL DEFAULT 0,
             consent_agreed_at datetime DEFAULT NULL,
             signature_completed tinyint(1) NOT NULL DEFAULT 0,
@@ -113,6 +115,8 @@ class VenusDatabaseTables {
             KEY user_id (user_id),
             KEY application_status (application_status),
             KEY applicant_type (applicant_type),
+            KEY referrer_email (referrer_email),
+            KEY referrer_user_id (referrer_user_id),
             KEY created_at (created_at)
         ) $this->charset_collate;";
 

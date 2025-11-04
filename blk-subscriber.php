@@ -25,7 +25,7 @@ if (!defined('ABSPATH')) {
 
 // Define plugin constants
 define('VENUS_MEMBER_VERSION', '1.0.0');
-define('VENUS_MEMBER_DB_VERSION', '1.1.0'); // Database version
+define('VENUS_MEMBER_DB_VERSION', '1.2.0'); // Database version
 define('VENUS_MEMBER_PLUGIN_FILE', __FILE__);
 define('VENUS_MEMBER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('VENUS_MEMBER_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -272,7 +272,9 @@ class Venus_Member_System
             'gender' => "VARCHAR(10) DEFAULT NULL AFTER individual_name",
             'id_number' => "VARCHAR(50) DEFAULT NULL AFTER gender",
             'birth_date' => "DATE DEFAULT NULL AFTER id_number",
-            'mobile_phone' => "VARCHAR(50) DEFAULT NULL AFTER birth_date"
+            'mobile_phone' => "VARCHAR(50) DEFAULT NULL AFTER birth_date",
+            'referrer_email' => "VARCHAR(255) DEFAULT NULL AFTER mobile_phone",
+            'referrer_user_id' => "BIGINT(20) UNSIGNED DEFAULT NULL AFTER referrer_email"
         );
 
         // 檢查每個欄位是否存在，不存在則添加
@@ -299,10 +301,18 @@ class Venus_Member_System
         }
 
         // 添加索引（如果不存在）
-        $index_exists = $wpdb->get_results("SHOW INDEX FROM `$table_name` WHERE Key_name = 'applicant_type'");
-        if (empty($index_exists)) {
-            $wpdb->query("ALTER TABLE `$table_name` ADD INDEX `applicant_type` (`applicant_type`)");
-            error_log("Venus Member System: Added index for 'applicant_type' column");
+        $indexes = array(
+            'applicant_type' => 'applicant_type',
+            'referrer_email' => 'referrer_email',
+            'referrer_user_id' => 'referrer_user_id'
+        );
+
+        foreach ($indexes as $index_name => $column_name) {
+            $index_exists = $wpdb->get_results("SHOW INDEX FROM `$table_name` WHERE Key_name = '$index_name'");
+            if (empty($index_exists)) {
+                $wpdb->query("ALTER TABLE `$table_name` ADD INDEX `$index_name` (`$column_name`)");
+                error_log("Venus Member System: Added index for '$column_name' column");
+            }
         }
     }
 
