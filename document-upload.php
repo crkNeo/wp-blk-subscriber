@@ -84,18 +84,25 @@ foreach ($individual_document_types as $type => $info) {
     <h2>身分認證資料上傳</h2>
 
     <div class="application-info">
-        <p><strong>申請編號:</strong> <?php echo esc_html($application['application_number']); ?></p>
         <p><strong>狀態:</strong> <?php echo esc_html(ucfirst(str_replace('_', ' ', $application['application_status']))); ?></p>
     </div>
 
-    <?php if ($application['application_status'] === 'under_review' || $application['application_status'] === 'approved'): ?>
+    <?php if ($application['application_status'] === 'under_review'): ?>
         <div class="documents-completed">
             <div class="success-message">
                 <h3>✅ 資料已提交完成</h3>
                 <p>您的申請已進入審核階段，我們會盡快處理。</p>
             </div>
         </div>
+        <?php elseif ($application['application_status'] === 'approved'): ?>
+        <div class="documents-completed">
+            <div class="success-message">
+                <h3>🎉 資料已審核完成</h3>
+                <p>請開始使用您的權益！</p>
+            </div>
+        </div>
     <?php endif; ?>
+</div>
 
     <!-- Applicant Type Selection -->
     <?php if (empty($application['applicant_type']) || $application['applicant_type'] === 'individual'): ?>
